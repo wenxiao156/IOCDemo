@@ -19,22 +19,22 @@
 	<bean id="honeycomb" class="com.cmsz.upay.ioc.vo.Honeycomb" lazy-init="true" /> 
 	
 	<!-- 依赖 -->
-	<!-- <bean id="jellyBean" class="com.cmsz.upay.ioc.vo.JellyBean">
+	<bean id="jellyBean" class="com.cmsz.upay.ioc.vo.JellyBean">
 		<property name="kitKat" ref="kitKat"></property>
 	</bean>
 	<bean id="kitKat" class="com.cmsz.upay.ioc.vo.KitKat">
 		<property name="name">KitKat</property>
-	</bean> -->
+	</bean>
 	
 	<!-- 循环依赖，属性注入 -->
-<!-- 	<bean id="student" class="com.cmsz.upay.ioc.vo.Student">
+	<bean id="student" class="com.cmsz.upay.ioc.vo.Student">
 		<property name="name">Kimi</property>
 		<property name="teacher" ref="teacher"></property>
 	</bean>
 	<bean id="teacher" class="com.cmsz.upay.ioc.vo.Teacher">
 		<property name="name">Hamilton</property>
 		<property name="student" ref="student"></property>
-	</bean> -->
+	</bean>
 	
 	<!-- 循环依赖，构造器注入，懒加载，加载时产生异常 -->
 	<!-- <bean id="student1" class="com.cmsz.upay.ioc.vo.Student" lazy-init="true">

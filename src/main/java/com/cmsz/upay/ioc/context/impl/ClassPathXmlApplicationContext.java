@@ -7,7 +7,6 @@ import com.cmsz.upay.ioc.vo.BeanDefinition;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.*;
-
 import org.dom4j.*;
 import org.dom4j.io.SAXReader;
 
@@ -37,11 +36,13 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 	 * 存储class及对应的BeanDefinition
 	 */
 	private Map<Class, BeanDefinition> beanClassMap = new HashMap<>();
+	
+	Document document = null;
 
 	public ClassPathXmlApplicationContext() {
 		this("applicationContext.xml");// 默认加载applicationContext.xml
 	}
-	
+
 	/**
 	 * 读取<beans>下的每个<bean>,将bean的属性和下面的property元素和constructor-arg元素保存进BeanDefinition中
 	 * 当scope为prototype以及lazy-init为true不创建对象实例，在调用处再创建
@@ -49,119 +50,96 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 	public ClassPathXmlApplicationContext(String configLocation) {
 		SAXReader reader = new SAXReader();
 		try {
-			Document document = reader.read("src/main/resources/" + configLocation);
+			document = reader.read("src/main/resources/" + configLocation);
 			Element beans = document.getRootElement();
 			Iterator it = beans.elementIterator();
 			while (it.hasNext()) {
 				Element beanElement = (Element) it.next();
 				String id = beanElement.attributeValue("id");
-				String fullClass = beanElement.attributeValue("class");
-				Class cls = Class.forName(fullClass);
-				String scope = beanElement.attributeValue("scope");
-				boolean lazyInit = Boolean.valueOf(beanElement.attributeValue("lazy-init"));
-				HashMap<String, String> propertysMap = new HashMap<>();
-				HashMap<String, String> constructorsMap = new HashMap<>();
-				Object obj = null;
-				
-				Iterator beanIt = beanElement.elementIterator();
-				while (beanIt.hasNext()) {
-					Element child = (Element) beanIt.next();
-					String value = child.attributeValue("value") == null ? child.getText()
-							: child.attributeValue("value");
-					if (child.getName().equals("property")) {
-						if (!lazyInit || (scope != null && scope.equals("prototype"))) {
-							if (obj == null) {
-								obj = cls.newInstance();
-							}
-							setProperty(cls, child, obj);
-						}
-						propertysMap.put(child.attributeValue("name"), value);
-					} else if (child.getName().equals("constructor-arg")) {
-						if (!lazyInit || (scope != null && scope.equals("prototype"))) {
-							Field f = cls.getDeclaredField(child.attributeValue("name"));
-							Class type = f.getType();
-							Constructor cons = cls.getConstructor(type);
-							obj = cons.newInstance(value);
-						}
-						constructorsMap.put(child.attributeValue("name"), value);
-					}
-
-				}
-				BeanDefinition beanDefinition = new BeanDefinition(id, fullClass, scope, lazyInit, propertysMap,
-						constructorsMap, obj);
-				beanIdMap.put(id, beanDefinition);
-				beanClassMap.put(cls, beanDefinition);
+				scanBean(id, beanElement);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
 
-//	private void readBean(Element beanElement, String scope, boolean lazyInit, Class cls, HashMap<String, String> propertysMap, HashMap<String, String> constructorsMap, Object obj) {
-//		Iterator beanIt = beanElement.elementIterator();
-//		try {
-//			while (beanIt.hasNext()) {
-//				Element child = (Element) beanIt.next();
-//				String value = child.attributeValue("value") == null ? child.getText() : child.attributeValue("value");
-//				if (child.getName().equals("property")) {
-//					if (!lazyInit || (scope != null && scope.equals("prototype"))) {
-//						if (obj == null) {
-//							obj = cls.newInstance();
-//						}
-//						setProperty(cls, child, obj);
-//					}
-//					propertysMap.put(child.attributeValue("name"), value);
-//				} else if (child.getName().equals("constructor-arg")) {
-//					if (!lazyInit || (scope != null && scope.equals("prototype"))) {
-//
-//						Field f = cls.getDeclaredField(child.attributeValue("name"));
-//						Class type = f.getType();
-//						Constructor cons = cls.getConstructor(type);
-//						obj = cons.newInstance(value);
-//
-//					}
-//					constructorsMap.put(child.attributeValue("name"), value);
-//				}
-//
-//			}
-//		} catch (Exception e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-//	}
 	/**
-	 * 根据property元素的属性值设置实例的字段值
+	 * 扫描bean元素获取属性和其子元素设置进beanIdMap和beanClassMap中
 	 */
-	private void setProperty(Class cls, Element child, Object obj) {
+	private BeanDefinition scanBean(String id, Element beanElement) {
 		try {
-			Field f = cls.getDeclaredField(child.attributeValue("name"));
-			String type = f.getType().toString();
-			f.setAccessible(true);
-			if (type.endsWith("int") || type.endsWith("Integer")) {
-				if (child.attributeValue("value") != null) {
-					f.set(obj, Integer.valueOf(child.attributeValue("value")));
+			String fullClass = beanElement.attributeValue("class");
+			Class cls = Class.forName(fullClass);
+			String scope = beanElement.attributeValue("scope");
+			boolean lazyInit = Boolean.valueOf(beanElement.attributeValue("lazy-init"));
+			HashMap<String, Object> propertysMap = new HashMap<>();
+			HashMap<String, Object> constructorsMap = new HashMap<>();
+			Object obj = null;
+			Iterator beanIt = beanElement.elementIterator();
+			while (beanIt.hasNext()) {
+				Element child = (Element) beanIt.next();
+				Object value = getMapValue(child);
+				if (child.getName().equals("property")) {
+					if (!lazyInit || scope == null || scope.equals("singleton")) {
+						if (obj == null) {
+							obj = cls.newInstance();
+						}
+					}
+					propertysMap.put(child.attributeValue("name"), value);
+				} else if (child.getName().equals("constructor-arg")) {
+					if (!lazyInit || scope == null || scope.equals("singleton")) {
+						Field f = cls.getDeclaredField(child.attributeValue("name"));
+						Class type = f.getType();
+						Constructor cons = cls.getConstructor(type);
+						obj = cons.newInstance(value);
+					}
+					constructorsMap.put(child.attributeValue("name"), value);
 				}
-				if (child.getText() != null && !child.getText().isEmpty()) {
-					f.set(obj, Integer.valueOf(child.getText()));
-				}
-			} else {
-				if (child.attributeValue("value") != null) {
-					f.set(obj, child.attributeValue("value"));
-				}
-				if (child.getText() != null && !child.getText().isEmpty()) {
-					f.set(obj, child.getText());
-				}
+
 			}
+			if (obj == null && !lazyInit && (scope == null || scope.equals("singleton"))) {
+				obj = cls.newInstance();
+			}
+			BeanDefinition beanDefinition = new BeanDefinition(id, fullClass, scope, lazyInit, propertysMap,
+					constructorsMap, obj);
+			beanIdMap.put(id, beanDefinition);
+			beanClassMap.put(cls, beanDefinition);
+			return beanDefinition;
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		return null;
+	}
+	
+	/**
+	 * 返回propertysMap中name对应的值
+	 */
+	private Object getMapValue(Element child) {
+		Object obj = null;
+		if (child.attributeValue("ref") != null) {
+			if (beanIdMap.containsKey(child.attributeValue("ref"))) {
+				obj = beanIdMap.get(child.attributeValue("ref")).getObj();
+			} else {
+				obj = child.attributeValue("ref");
+			}
+		} else {
+			obj = child.attributeValue("value") == null ? child.getText() : child.attributeValue("value");
+		}
+		return obj;
 	}
 
 	@Override
-	public Object getBean(String name) throws BeansException {
+	public Object getBean(String name) throws BeansException {	
 		Object obj = beanIdMap.get(name).getObj();
 		if (obj == null) {
 			obj = prototypeOrLazy(beanIdMap.get(name), obj);
+		}
+		try {
+			Class cls = Class.forName(beanIdMap.get(name).getFullClass());
+			setProperty(beanIdMap.get(name), cls, obj);
+		} catch (ClassNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 		return obj;
 	}
@@ -172,6 +150,13 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 		if (obj == null) {
 			obj = prototypeOrLazy(beanIdMap.get(name), obj);
 		}
+		try {
+			Class cls = Class.forName(beanIdMap.get(name).getFullClass());
+			setProperty(beanIdMap.get(name), cls, obj);
+		} catch (ClassNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		return (T) obj;
 	}
 
@@ -181,16 +166,47 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 		if (obj == null) {
 			obj = prototypeOrLazy(beanClassMap.get(requiredType), obj);
 		}
+		setProperty(beanClassMap.get(requiredType), requiredType, obj);
 		return (T) obj;
 	}
 	
+	/**
+	 * 在实例化后再设置属性，方便循环依赖
+	 */
+	private void setProperty(BeanDefinition beanDef, Class cls, Object obj) {
+		HashMap<String, Object> propertysMap = beanDef.getPropertys();
+		try {
+			if (propertysMap.size() > 0) {
+				for (String key : propertysMap.keySet()) {
+					Field f = cls.getDeclaredField(key);
+					String type = f.getType().toString();
+					f.setAccessible(true);
+					if (type.endsWith("int") || type.endsWith("Integer")) {
+						f.set(obj, Integer.valueOf(propertysMap.get(key).toString()));
+					} else {
+						Object str = propertysMap.get(key);
+						if(beanIdMap.containsKey(propertysMap.get(key))) {
+							BeanDefinition ref = beanIdMap.get(propertysMap.get(key));
+							Object value = getBean(Class.forName(ref.getFullClass()));
+							f.set(obj, ref.getObj());
+						} else {
+							f.set(obj, propertysMap.get(key));
+						}	
+					} 
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
 	/**
 	 * 当scope为prototype或者懒加载时，在getbean时才创建对象实例
 	 */
 	public Object prototypeOrLazy(BeanDefinition beanDef, Object obj) {
 		try {
 			Class cls = Class.forName(beanDef.getFullClass());
-			HashMap<String, String> constructorsMap = beanDef.getConstructors();
+			HashMap<String, Object> constructorsMap = beanDef.getConstructors();
 			if (constructorsMap.size() < 1) {
 				obj = cls.newInstance();
 			} else {
@@ -204,19 +220,6 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 				}
 				Constructor cons = cls.getConstructor(type);
 				obj = cons.newInstance(constructorValue);
-			}
-			HashMap<String, String> propertysMap = beanDef.getPropertys();
-			if (propertysMap.size() > 0) {
-				for (String key : propertysMap.keySet()) {
-					Field f = cls.getDeclaredField(key);
-					String type = f.getType().toString();
-					f.setAccessible(true);
-					if (type.endsWith("int") || type.endsWith("Integer")) {
-						f.set(obj, Integer.valueOf(propertysMap.get(key)));
-					} else {
-						f.set(obj, propertysMap.get(key));
-					}
-				}
 			}
 		} catch (Exception e) {
 			e.printStackTrace();

@@ -102,7 +102,7 @@ public class TestSuit {
 	/**
 	 * 测试bean依赖
 	 */
-//	@Test
+	@Test
 	public void test6() {
 		JellyBean jellyBean = ctx.getBean("jellyBean", JellyBean.class);
 		Assert.assertNotNull(jellyBean);
@@ -113,7 +113,7 @@ public class TestSuit {
 	/**
 	 * 测试循环依赖
 	 */
-//	@Test
+	@Test
 	public void test7() {
 		Student student = ctx.getBean("student", Student.class);
 		Teacher teacher = ctx.getBean("teacher", Teacher.class);
