@@ -7,16 +7,16 @@ public class BeanDefinition {
 	private String fullClass;
 	private String scope;
 	private boolean lazyInit;
-	private HashMap<String, Object> propertys = new HashMap<>();
-	private HashMap<String, Object> constructors = new HashMap<>();
+	private Map<String, Object> propertys = new HashMap<>();
+	private Map<String, Object> constructors = new HashMap<>();
 	private Object obj;
-	public BeanDefinition(String id, String fullClass, String scope, boolean lazyInit,  HashMap<String, Object> propertys, HashMap<String, Object> constructors, Object obj) {
+	public BeanDefinition(String id, String fullClass, String scope, boolean lazyInit,  Map<String, Object> propertysMap, Map<String, Object> constructorsMap, Object obj) {
 		this.id = id;
 		this.fullClass = fullClass;
 		this.scope = scope;
 		this.lazyInit = lazyInit;
-		this.propertys = propertys;
-		this.constructors = constructors;
+		this.propertys = propertysMap;
+		this.constructors = constructorsMap;
 		this.obj = obj;
 	}
 	public Object getObj() {
@@ -49,13 +49,13 @@ public class BeanDefinition {
 	public void setLazyInit(boolean lazyInit) {
 		this.lazyInit = lazyInit;
 	}
-	public HashMap<String, Object> getPropertys() {
+	public Map<String, Object> getPropertys() {
 		return propertys;
 	}
 	public void setPropertys(HashMap<String, Object> propertys) {
 		this.propertys = propertys;
 	}
-	public HashMap<String, Object> getConstructors() {
+	public Map<String, Object> getConstructors() {
 		return constructors;
 	}
 	public void setConstructors(HashMap<String, Object> constructors) {

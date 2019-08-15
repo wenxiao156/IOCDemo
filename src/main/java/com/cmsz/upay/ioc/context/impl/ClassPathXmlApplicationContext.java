@@ -32,11 +32,9 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 	 * 存储id及对应的BeanDefinition
 	 */
 	private Map<String, BeanDefinition> beanIdMap = new HashMap<>();
-	/**
-	 * 存储class及对应的BeanDefinition
-	 */
-	private Map<Class, BeanDefinition> beanClassMap = new HashMap<>();
-	
+
+	private ArrayList<String> isConstructingList = new ArrayList<>();
+
 	Document document = null;
 
 	public ClassPathXmlApplicationContext() {
@@ -56,7 +54,7 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 			while (it.hasNext()) {
 				Element beanElement = (Element) it.next();
 				String id = beanElement.attributeValue("id");
-				scanBean(id, beanElement);
+				scanBean(id, beanElement, false);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -66,20 +64,20 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 	/**
 	 * 扫描bean元素获取属性和其子元素设置进beanIdMap和beanClassMap中
 	 */
-	private BeanDefinition scanBean(String id, Element beanElement) {
+	private BeanDefinition scanBean(String id, Element beanElement, boolean isConstructor) throws BeansException {
 		try {
 			String fullClass = beanElement.attributeValue("class");
 			Class cls = Class.forName(fullClass);
 			String scope = beanElement.attributeValue("scope");
 			boolean lazyInit = Boolean.valueOf(beanElement.attributeValue("lazy-init"));
-			HashMap<String, Object> propertysMap = new HashMap<>();
-			HashMap<String, Object> constructorsMap = new HashMap<>();
+			Map<String, Object> propertysMap = new LinkedHashMap<>();
+			Map<String, Object> constructorsMap = new LinkedHashMap<>();
 			Object obj = null;
 			Iterator beanIt = beanElement.elementIterator();
 			while (beanIt.hasNext()) {
 				Element child = (Element) beanIt.next();
-				Object value = getMapValue(child);
 				if (child.getName().equals("property")) {
+					Object value = getMapValue(child);
 					if (!lazyInit || scope == null || scope.equals("singleton")) {
 						if (obj == null) {
 							obj = cls.newInstance();
@@ -87,30 +85,28 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 					}
 					propertysMap.put(child.attributeValue("name"), value);
 				} else if (child.getName().equals("constructor-arg")) {
-					if (!lazyInit || scope == null || scope.equals("singleton")) {
-						Field f = cls.getDeclaredField(child.attributeValue("name"));
-						Class type = f.getType();
-						Constructor cons = cls.getConstructor(type);
-						obj = cons.newInstance(value);
-					}
-					constructorsMap.put(child.attributeValue("name"), value);
+					constructorsMap.put(child.attributeValue("name"), getMapValue(child));
 				}
-
 			}
-			if (obj == null && !lazyInit && (scope == null || scope.equals("singleton"))) {
+			if (constructorsMap.size() > 0 && !lazyInit && (scope == null || scope.equals("singleton"))) {
+				obj = constructorNewInstance(cls, id, constructorsMap);
+			} else if (obj == null && !lazyInit && (scope == null || scope.equals("singleton"))) {
 				obj = cls.newInstance();
 			}
 			BeanDefinition beanDefinition = new BeanDefinition(id, fullClass, scope, lazyInit, propertysMap,
 					constructorsMap, obj);
 			beanIdMap.put(id, beanDefinition);
-			beanClassMap.put(cls, beanDefinition);
 			return beanDefinition;
-		} catch (Exception e) {
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
+		} catch (InstantiationException e) {
+			e.printStackTrace();
+		} catch (IllegalAccessException e) {
 			e.printStackTrace();
 		}
 		return null;
 	}
-	
+
 	/**
 	 * 返回propertysMap中name对应的值
 	 */
@@ -128,8 +124,80 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 		return obj;
 	}
 
+	// private Object getConstructorsMapValue(Element child) throws
+	// BeansException {
+	// Object obj = null;
+	// if (child.attributeValue("ref") != null) {
+	// if (beanIdMap.containsKey(child.attributeValue("ref"))) {
+	// obj = beanIdMap.get(child.attributeValue("ref")).getObj();
+	// } else {
+	// Element beans = document.getRootElement();
+	// Iterator it = beans.elementIterator();
+	// while (it.hasNext()) {
+	// Element beanElement = (Element) it.next();
+	// String id = beanElement.attributeValue("id");
+	// if (id.equals(child.attributeValue("ref"))) {
+	// isConstructingList.add(id);
+	// if (isConstructingList.contains(child.attributeValue("ref"))) {
+	// throw new BeansException("循环依赖，构造器注入");
+	// } else {
+	// obj = scanBean(child.attributeValue("ref"), beanElement, true);
+	// }
+	// break;
+	// }
+	// }
+	// }
+	// } else {
+	// obj = child.attributeValue("value") == null ? child.getText() :
+	// child.attributeValue("value");
+	// }
+	// return obj;
+	// }
+
+	private Object constructorNewInstance(Class cls, String id, Map<String, Object> constructorsMap) throws BeansException{
+		Class[] typeList = new Class[constructorsMap.size()];
+		Object[] objList = new Object[constructorsMap.size()];
+		try {
+			int i = 0;
+			for (String key : constructorsMap.keySet()) {
+				Field f = cls.getDeclaredField(key);
+				typeList[i] = f.getType();
+				if (!(typeList[i].toString().endsWith("int") || typeList[i].toString().endsWith("Integer")
+						|| typeList[i].toString().endsWith("String"))) {
+					Element beans = document.getRootElement();
+					Iterator it = beans.elementIterator();
+					while (it.hasNext()) {
+						Element beanElement = (Element) it.next();
+						String beanId = beanElement.attributeValue("id");
+						Iterator beanIt = beanElement.elementIterator();
+						if (beanId.equals(constructorsMap.get(key))) {
+							isConstructingList.add(id);
+							while (beanIt.hasNext()) {
+								Element child = (Element) beanIt.next();
+								if (child.attributeValue("ref") != null
+										&& isConstructingList.contains(child.attributeValue("ref"))) {
+									throw new BeansException("循环依赖，构造器注入");
+								}
+							}
+							objList[i] = scanBean(constructorsMap.get(key).toString(), beanElement, true).getObj();
+						}
+					}
+				} else {
+					objList[i] = constructorsMap.get(key);
+				}
+				i++;
+			}
+			Constructor cons = cls.getConstructor(typeList);
+			Object obj = cons.newInstance(objList);
+			return obj;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
 	@Override
-	public Object getBean(String name) throws BeansException {	
+	public Object getBean(String name) throws BeansException {
 		Object obj = beanIdMap.get(name).getObj();
 		if (obj == null) {
 			obj = prototypeOrLazy(beanIdMap.get(name), obj);
@@ -138,7 +206,6 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 			Class cls = Class.forName(beanIdMap.get(name).getFullClass());
 			setProperty(beanIdMap.get(name), cls, obj);
 		} catch (ClassNotFoundException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return obj;
@@ -154,7 +221,6 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 			Class cls = Class.forName(beanIdMap.get(name).getFullClass());
 			setProperty(beanIdMap.get(name), cls, obj);
 		} catch (ClassNotFoundException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return (T) obj;
@@ -162,19 +228,34 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 
 	@Override
 	public <T> T getBean(Class<T> requiredType) throws BeansException {
-		Object obj = beanClassMap.get(requiredType).getObj();
-		if (obj == null) {
-			obj = prototypeOrLazy(beanClassMap.get(requiredType), obj);
+		ArrayList<Object> objList = new ArrayList<>();
+		try {
+			for (String id : beanIdMap.keySet()) {
+				Class cls = Class.forName(beanIdMap.get(id).getFullClass());
+				if (cls == requiredType) {
+					Object obj = beanIdMap.get(id).getObj();
+					if (obj == null) {
+						prototypeOrLazy(beanIdMap.get(id), obj);
+					}
+					setProperty(beanIdMap.get(id), requiredType, obj);
+					objList.add(beanIdMap.get(id).getObj());
+				}
+			}
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
 		}
-		setProperty(beanClassMap.get(requiredType), requiredType, obj);
-		return (T) obj;
+		if (objList.size() > 1) {
+			throw new BeansException("对象不确定");
+		} else {
+			return (T) objList.get(0);
+		}
 	}
-	
+
 	/**
 	 * 在实例化后再设置属性，方便循环依赖
 	 */
-	private void setProperty(BeanDefinition beanDef, Class cls, Object obj) {
-		HashMap<String, Object> propertysMap = beanDef.getPropertys();
+	private void setProperty(BeanDefinition beanDef, Class cls, Object obj){
+		Map<String, Object> propertysMap = beanDef.getPropertys();
 		try {
 			if (propertysMap.size() > 0) {
 				for (String key : propertysMap.keySet()) {
@@ -184,15 +265,14 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 					if (type.endsWith("int") || type.endsWith("Integer")) {
 						f.set(obj, Integer.valueOf(propertysMap.get(key).toString()));
 					} else {
-						Object str = propertysMap.get(key);
-						if(beanIdMap.containsKey(propertysMap.get(key))) {
+						if (beanIdMap.containsKey(propertysMap.get(key))) {
 							BeanDefinition ref = beanIdMap.get(propertysMap.get(key));
-							Object value = getBean(Class.forName(ref.getFullClass()));
+							setProperty(ref, Class.forName(ref.getFullClass()), ref.getObj());
 							f.set(obj, ref.getObj());
 						} else {
 							f.set(obj, propertysMap.get(key));
-						}	
-					} 
+						}
+					}
 				}
 			}
 		} catch (Exception e) {
@@ -203,27 +283,34 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 	/**
 	 * 当scope为prototype或者懒加载时，在getbean时才创建对象实例
 	 */
-	public Object prototypeOrLazy(BeanDefinition beanDef, Object obj) {
+	public Object prototypeOrLazy(BeanDefinition beanDef, Object obj)  throws BeansException{
 		try {
 			Class cls = Class.forName(beanDef.getFullClass());
-			HashMap<String, Object> constructorsMap = beanDef.getConstructors();
+			Map<String, Object> constructorsMap = beanDef.getConstructors();
 			if (constructorsMap.size() < 1) {
 				obj = cls.newInstance();
 			} else {
-				Object[] constructorValue = new Object[constructorsMap.size()];
-				Class[] type = new Class[constructorsMap.size()];
-				int i = 0;
-				for (String key : constructorsMap.keySet()) {
-					Field f = cls.getDeclaredField(key);
-					type[i++] = f.getType();
-					constructorValue[i] = constructorsMap.get(key);
-				}
-				Constructor cons = cls.getConstructor(type);
-				obj = cons.newInstance(constructorValue);
+				obj = constructorNewInstance(cls, beanDef.getId(), constructorsMap);
+				// Object[] constructorValue = new
+				// Object[constructorsMap.size()];
+				// Class[] type = new Class[constructorsMap.size()];
+				// int i = 0;
+				// for (String key : constructorsMap.keySet()) {
+				// Field f = cls.getDeclaredField(key);
+				// type[i] = f.getType();
+				// constructorValue[i] = constructorsMap.get(key);
+				// i++;
+				// }
+				// Constructor cons = cls.getConstructor(type);
+				// obj = cons.newInstance(constructorValue);
 			}
-		} catch (Exception e) {
+		}  catch (ClassNotFoundException e) {
 			e.printStackTrace();
-		}
+		} catch (InstantiationException e) {
+			e.printStackTrace();
+		} catch (IllegalAccessException e) {
+			e.printStackTrace();
+		} 
 		return obj;
 	}
 }

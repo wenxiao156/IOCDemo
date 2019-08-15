@@ -36,14 +36,14 @@
 		<property name="student" ref="student"></property>
 	</bean>
 	
+
 	<!-- 循环依赖，构造器注入，懒加载，加载时产生异常 -->
-	<!-- <bean id="student1" class="com.cmsz.upay.ioc.vo.Student" lazy-init="true">
+	<bean id="student1" class="com.cmsz.upay.ioc.vo.Student" lazy-init="true">
 		<constructor-arg name="name" value="Kimi"></constructor-arg>
 		<constructor-arg name="teacher" ref="teacher1"></constructor-arg>
 	</bean>
 	<bean id="teacher1" class="com.cmsz.upay.ioc.vo.Teacher" lazy-init="true">
 		<constructor-arg name="name" value="Hamilton"></constructor-arg>
 		<constructor-arg name="student" ref="student1"></constructor-arg>
-	</bean> -->
-	
+	</bean>
 </beans>
