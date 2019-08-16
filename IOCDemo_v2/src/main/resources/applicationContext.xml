@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans>
+		
+	<!-- 属性注入，单例模式 -->
+	<bean id="cupCake" class="com.cmsz.upay.ioc.vo.Cupcake">
+		<property name="name">CupCake</property>
+		<property name="price" value="10"/>
+	</bean>
+	
+	<!-- 构造器注入 -->
+	<bean id="donut" class="com.cmsz.upay.ioc.vo.Donut">
+		<constructor-arg name="name">Donut</constructor-arg>
+	</bean>
+	
+	<!-- prototype模式 -->
+	<bean id="froyo" class="com.cmsz.upay.ioc.vo.Froyo" scope="prototype" />
+	
+	<!-- 懒加载 -->
+	<bean id="honeycomb" class="com.cmsz.upay.ioc.vo.Honeycomb" lazy-init="true" />
+	
+	<!-- 依赖 -->
+	<bean id="jellyBean" class="com.cmsz.upay.ioc.vo.JellyBean">
+		<property name="kitKat" ref="kitKat"></property>
+	</bean>
+	<bean id="kitKat" class="com.cmsz.upay.ioc.vo.KitKat">
+		<property name="name">KitKat</property>
+	</bean>
+	
+	<!-- 循环依赖，属性注入 -->
+	<bean id="student" class="com.cmsz.upay.ioc.vo.Student">
+		<property name="name">Kimi</property>
+		<property name="teacher" ref="teacher"></property>
+	</bean>
+	<bean id="teacher" class="com.cmsz.upay.ioc.vo.Teacher">
+		<property name="name">Hamilton</property>
+		<property name="student" ref="student"></property>
+	</bean>
+	
+	<!-- 循环依赖，构造器注入，懒加载，加载时产生异常 -->
+	<bean id="student1" class="com.cmsz.upay.ioc.vo.Student" lazy-init="true">
+		<constructor-arg name="name" value="Kimi"></constructor-arg>
+		<constructor-arg name="teacher" ref="teacher1"></constructor-arg>
+	</bean>
+	<bean id="teacher1" class="com.cmsz.upay.ioc.vo.Teacher" lazy-init="true">
+		<constructor-arg name="name" value="Hamilton"></constructor-arg>
+		<constructor-arg name="student" ref="student1"></constructor-arg>
+	</bean>
+	
+</beans>
