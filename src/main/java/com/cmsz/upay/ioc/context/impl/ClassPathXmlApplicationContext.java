@@ -6,6 +6,7 @@ import com.cmsz.upay.ioc.vo.BeanDefinition;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 import org.dom4j.*;
 import org.dom4j.io.SAXReader;
@@ -28,13 +29,14 @@ import org.dom4j.io.SAXReader;
  * 
  */
 public class ClassPathXmlApplicationContext implements ApplicationContext {
-	/**
-	 * 存储id及对应的BeanDefinition
-	 */
+	
+	/** 存储id及对应的BeanDefinition */
 	private Map<String, BeanDefinition> beanIdMap = new HashMap<>();
-
+	
+	/** 存储正在创建的bean的id */
 	private ArrayList<String> isConstructingList = new ArrayList<>();
 
+	/** 读取的bean文件 */
 	Document document = null;
 
 	public ClassPathXmlApplicationContext() {
@@ -42,8 +44,7 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 	}
 
 	/**
-	 * 读取<beans>下的每个<bean>,将bean的属性和下面的property元素和constructor-arg元素保存进BeanDefinition中
-	 * 当scope为prototype以及lazy-init为true不创建对象实例，在调用处再创建
+	 * 读取<beans>下的每个<bean>,将bean的属性、property子元素和constructor-arg子元素保存进BeanDefinition中
 	 */
 	public ClassPathXmlApplicationContext(String configLocation) {
 		SAXReader reader = new SAXReader();
@@ -63,6 +64,7 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 
 	/**
 	 * 扫描bean元素获取属性和其子元素设置进beanIdMap和beanClassMap中
+	 * 当scope为prototype以及lazy-init为true不创建对象实例，在调用处再创建
 	 */
 	private BeanDefinition scanBean(String id, Element beanElement, boolean isConstructor) throws BeansException {
 		try {
@@ -78,8 +80,8 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 				Element child = (Element) beanIt.next();
 				if (child.getName().equals("property")) {
 					Object value = getMapValue(child);
-					if (!lazyInit || scope == null || scope.equals("singleton")) {
-						if (obj == null) {
+					if (!lazyInit && (scope == null || scope.equals("singleton"))) { //lazy-init为false或者scope不为prototype时创建实例
+						if (obj == null) { //需判断obj是否为null，否则会覆盖原本创建的实例，导致只保存了最后一个属性值
 							obj = cls.newInstance();
 						}
 					}
@@ -88,9 +90,11 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 					constructorsMap.put(child.attributeValue("name"), getMapValue(child));
 				}
 			}
-			if (constructorsMap.size() > 0 && !lazyInit && (scope == null || scope.equals("singleton"))) {
+			//当构造器参数不为空，并且lazy-init为false或者scope不为prototype时或者构造器参数不为空并且被依赖时创建实例
+			if (constructorsMap.size() > 0 && !lazyInit && (scope == null || scope.equals("singleton")) || (constructorsMap.size() > 0 && isConstructor)) {
 				obj = constructorNewInstance(cls, id, constructorsMap);
-			} else if (obj == null && !lazyInit && (scope == null || scope.equals("singleton"))) {
+			//当没有创建实例但是lazy-init为false或者scope不为prototype时或者被依赖时需调用默认构造器创建实例
+			} else if (obj == null && !lazyInit && (scope == null || scope.equals("singleton")) || (obj == null && isConstructor)) {
 				obj = cls.newInstance();
 			}
 			BeanDefinition beanDefinition = new BeanDefinition(id, fullClass, scope, lazyInit, propertysMap,
@@ -108,7 +112,9 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 	}
 
 	/**
-	 * 返回propertysMap中name对应的值
+	 * 返回propertysMap和constructorsMap中name对应的值
+	 * 如果是ref，需判断是否存在依赖的bean，存在即返回bean对象，否则直接保存对象id
+	 * 否则是value或者是text对应的值
 	 */
 	private Object getMapValue(Element child) {
 		Object obj = null;
@@ -124,36 +130,15 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 		return obj;
 	}
 
-	// private Object getConstructorsMapValue(Element child) throws
-	// BeansException {
-	// Object obj = null;
-	// if (child.attributeValue("ref") != null) {
-	// if (beanIdMap.containsKey(child.attributeValue("ref"))) {
-	// obj = beanIdMap.get(child.attributeValue("ref")).getObj();
-	// } else {
-	// Element beans = document.getRootElement();
-	// Iterator it = beans.elementIterator();
-	// while (it.hasNext()) {
-	// Element beanElement = (Element) it.next();
-	// String id = beanElement.attributeValue("id");
-	// if (id.equals(child.attributeValue("ref"))) {
-	// isConstructingList.add(id);
-	// if (isConstructingList.contains(child.attributeValue("ref"))) {
-	// throw new BeansException("循环依赖，构造器注入");
-	// } else {
-	// obj = scanBean(child.attributeValue("ref"), beanElement, true);
-	// }
-	// break;
-	// }
-	// }
-	// }
-	// } else {
-	// obj = child.attributeValue("value") == null ? child.getText() :
-	// child.attributeValue("value");
-	// }
-	// return obj;
-	// }
-
+	/**
+	 * 通过有参构造器创建实例
+	 * 用typeList保存构造器所有参数的类型，objList保存传进的实参
+	 * 遍历保存构造器的name和value的constructorsMap，如果参数类型属于自定义对象，重新遍历<bean>元素
+	 * 如果<bean>元素的id与传进的参数相同，将目前创建实例的对象的id保存进isConstructingList中，表示正在依赖着其他对象创建实例。否则直接将constructorsMap中的key对应的value值保存进objList中
+	 * 如果<bean>元素中constructor-arg存在依赖的对象已经在isConstructingList中，构造器循环依赖，抛出BeansException异常
+	 * 不存在的话就可以直接将实例对象保存进objList中
+	 * 最后根据typeList和objList创建实例对象
+	 */
 	private Object constructorNewInstance(Class cls, String id, Map<String, Object> constructorsMap) throws BeansException{
 		Class[] typeList = new Class[constructorsMap.size()];
 		Object[] objList = new Object[constructorsMap.size()];
@@ -174,12 +159,14 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 							isConstructingList.add(id);
 							while (beanIt.hasNext()) {
 								Element child = (Element) beanIt.next();
-								if (child.attributeValue("ref") != null
+								if (child.getName().equals("constructor-arg") && child.attributeValue("ref") != null
 										&& isConstructingList.contains(child.attributeValue("ref"))) {
 									throw new BeansException("循环依赖，构造器注入");
 								}
 							}
 							objList[i] = scanBean(constructorsMap.get(key).toString(), beanElement, true).getObj();
+						} else {
+							objList[i] = constructorsMap.get(key);
 						}
 					}
 				} else {
@@ -190,12 +177,25 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 			Constructor cons = cls.getConstructor(typeList);
 			Object obj = cons.newInstance(objList);
 			return obj;
-		} catch (Exception e) {
+		} catch (NoSuchFieldException e) {
+			e.printStackTrace();
+		} catch (NoSuchMethodException e) {
+			e.printStackTrace();
+		} catch (InstantiationException e) {
+			e.printStackTrace();
+		} catch (IllegalAccessException e) {
+			e.printStackTrace();
+		} catch (InvocationTargetException e) {
 			e.printStackTrace();
 		}
 		return null;
 	}
-
+	
+	/**
+	 * 通过bean id获取对象实例
+	 * 尚未创建实例则调用prototypeOrLazy方法创建实例
+	 * 创建实例之后为实例设置属性
+	 */
 	@Override
 	public Object getBean(String name) throws BeansException {
 		Object obj = beanIdMap.get(name).getObj();
@@ -210,22 +210,19 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 		}
 		return obj;
 	}
-
+	
+	/**
+	 * 通过bean id和class获取对象实例
+	 */
 	@Override
 	public <T> T getBean(String name, Class<T> requiredType) throws BeansException {
-		Object obj = beanIdMap.get(name).getObj();
-		if (obj == null) {
-			obj = prototypeOrLazy(beanIdMap.get(name), obj);
-		}
-		try {
-			Class cls = Class.forName(beanIdMap.get(name).getFullClass());
-			setProperty(beanIdMap.get(name), cls, obj);
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		}
-		return (T) obj;
+		return (T) getBean(name);
 	}
-
+	
+	/**
+	 * 通过bean class获取对象实例
+	 * 遍历beanIdMap找到class为requiredType的bean，如果查找到的对象超过1个，抛出BeansException异常
+	 */
 	@Override
 	public <T> T getBean(Class<T> requiredType) throws BeansException {
 		ArrayList<Object> objList = new ArrayList<>();
@@ -253,6 +250,7 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 
 	/**
 	 * 在实例化后再设置属性，方便循环依赖
+	 * 获取属性的类型再设置属性值
 	 */
 	private void setProperty(BeanDefinition beanDef, Class cls, Object obj){
 		Map<String, Object> propertysMap = beanDef.getPropertys();
@@ -291,18 +289,6 @@ public class ClassPathXmlApplicationContext implements ApplicationContext {
 				obj = cls.newInstance();
 			} else {
 				obj = constructorNewInstance(cls, beanDef.getId(), constructorsMap);
-				// Object[] constructorValue = new
-				// Object[constructorsMap.size()];
-				// Class[] type = new Class[constructorsMap.size()];
-				// int i = 0;
-				// for (String key : constructorsMap.keySet()) {
-				// Field f = cls.getDeclaredField(key);
-				// type[i] = f.getType();
-				// constructorValue[i] = constructorsMap.get(key);
-				// i++;
-				// }
-				// Constructor cons = cls.getConstructor(type);
-				// obj = cons.newInstance(constructorValue);
 			}
 		}  catch (ClassNotFoundException e) {
 			e.printStackTrace();
