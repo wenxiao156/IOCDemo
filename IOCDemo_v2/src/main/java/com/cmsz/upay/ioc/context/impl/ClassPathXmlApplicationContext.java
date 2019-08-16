@@ -6,10 +6,10 @@ import java.util.Map;
 import org.dom4j.Document;
 
 import com.cmsz.upay.ioc.beans.exception.BeansException;
-import com.cmsz.upay.ioc.beans.factory.config.BeanDefinition;
+//import com.cmsz.upay.ioc.beans.factory.config.BeanDefinition;
 import com.cmsz.upay.ioc.context.ApplicationContext;
-import com.cmsz.upay.ioc.util.BeanDefinitionUtil;
-import com.cmsz.upay.ioc.util.Dom4jUtil;
+//import com.cmsz.upay.ioc.util.BeanDefinitionUtil;
+//import com.cmsz.upay.ioc.util.Dom4jUtil;
 
 /**
  * <b>实现类</b><br>
