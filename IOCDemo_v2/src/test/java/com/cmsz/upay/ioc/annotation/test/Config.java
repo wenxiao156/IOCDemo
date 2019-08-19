@@ -1,6 +1,7 @@
 package com.cmsz.upay.ioc.annotation.test;
 
 import com.cmsz.upay.ioc.context.annotation.Bean;
+import com.cmsz.upay.ioc.context.annotation.Configuration;
 import com.cmsz.upay.ioc.context.annotation.Lazy;
 import com.cmsz.upay.ioc.context.annotation.Scope;
 import com.cmsz.upay.ioc.vo.Cupcake;
@@ -11,20 +12,20 @@ import com.cmsz.upay.ioc.vo.JellyBean;
 import com.cmsz.upay.ioc.vo.KitKat;
 import com.cmsz.upay.ioc.vo.Student;
 import com.cmsz.upay.ioc.vo.Teacher;
-
+@Configuration
 public class Config {
 	/**
 	 * 属性注入，单例模式
 	 * @return
 	 */
 	@Bean
-	public Cupcake cupcake() {
+	public Cupcake cupCake() {
 		Cupcake cupcake = new Cupcake();
 		cupcake.setName("CupCake");
 		cupcake.setPrice(10);
 		return cupcake;
 	}
-	
+
 	/**
 	 * 构造器注入
 	 * @return
@@ -33,7 +34,7 @@ public class Config {
 	public Donut donutBean() {
 		return new Donut("Donut");
 	}
-	
+
 	/**
 	 * prototype模式
 	 * @return
@@ -43,7 +44,7 @@ public class Config {
 	public Froyo froyo() {
 		return new Froyo();
 	}
-	
+
 	/**
 	 * 懒加载
 	 * @return
@@ -53,7 +54,7 @@ public class Config {
 	public Honeycomb honeycomb() {
 		return new Honeycomb();
 	}
-	
+
 	/**
 	 * 依赖
 	 * @param kitKat
@@ -71,44 +72,46 @@ public class Config {
 		kitKat.setName("kitkat");
 		return kitKat;
 	}
-	
+
 	/**
 	 * 循环依赖，属性注入
 	 * @return
 	 */
 	@Bean
-	public Student student() {
+	@Lazy
+	public Student student(Teacher teacher) {
 		Student student = new Student();
 		student.setName("kimi");
-		student.setTeacher(teacher());
+		student.setTeacher(teacher);
 		return student;
 	}
 	@Bean
-	public Teacher teacher() {
+	@Lazy
+	public Teacher teacher(Student student) {
 		Teacher teacher = new Teacher();
 		teacher.setName("Hamilton");
-		teacher.setStudent(student());
+		teacher.setStudent(student);
 		return teacher;
 	}
-	
+
 	/**
 	 * 循环依赖，构造器注入，懒加载，加载时产生异常
 	 * @return
 	 */
 	@Bean
 	@Lazy
-	public Student student1() {
-		Student student = new Student();
-		student.setName("kimi");
-		student.setTeacher(teacher1());
+	public Student student1(Teacher teacher1) {
+		Student student = new Student("kimi", teacher1);
+//		student.setName("kimi");
+//		student.setTeacher(teacher1);
 		return student;
 	}
 	@Bean
 	@Lazy
-	public Teacher teacher1() {
-		Teacher teacher = new Teacher();
-		teacher.setName("Hamilton");
-		teacher.setStudent(student1());
+	public Teacher teacher1(Student student1) {
+		Teacher teacher = new Teacher("Hamilton",student1);
+//		teacher.setName("Hamilton");
+//		teacher.setStudent(student1);
 		return teacher;
 	}
 }

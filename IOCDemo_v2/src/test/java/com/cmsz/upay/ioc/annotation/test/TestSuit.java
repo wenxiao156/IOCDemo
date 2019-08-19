@@ -39,7 +39,7 @@ public class TestSuit {
 		Assert.assertEquals("CupCake", cupcake.getName());
 		Assert.assertEquals(10, cupcake.getPrice());
 	}
-	
+
 	/**
 	 * 测试构造器注入
 	 */
@@ -49,7 +49,7 @@ public class TestSuit {
 		Assert.assertNotNull(donut);
 		Assert.assertEquals("Donut", donut.getName());
 	}
-	
+
 	/**
 	 * 测试单例模式
 	 */
@@ -61,7 +61,7 @@ public class TestSuit {
 		Assert.assertNotNull(cupcake2);
 		Assert.assertTrue(cupcake1== cupcake2);// 两个实例相等
 	}
-	
+
 	/**
 	 * 测试prototype模式
 	 */
@@ -73,7 +73,7 @@ public class TestSuit {
 		Assert.assertNotNull(froyo2);
 		Assert.assertFalse(froyo1 == froyo2);// 两个实例不相等
 	}
-	
+
 	/**
 	 * 测试懒加载
 	 */
@@ -83,22 +83,22 @@ public class TestSuit {
 		PrintStream console = System.out;
 		ByteArrayOutputStream bao = new ByteArrayOutputStream();
 		System.setOut(new PrintStream(bao));
-		
+
 		// 获取懒加载实例
 		Honeycomb honeycomb = ctx.getBean(Honeycomb.class);
-		
+
 		// 获取当前的换行符
 		String lineSeparator = java.security.AccessController.doPrivileged(
 	            new sun.security.action.GetPropertyAction("line.separator"));
 		// 预期输出内容
 		String output = "Honeycomb Constructor" + lineSeparator;
-		
+
 		Assert.assertEquals(output, bao.toString());
-		
+
 		// 还原控制台输出
 		System.setOut(console);
 	}
-	
+
 	/**
 	 * 测试bean依赖
 	 */
@@ -107,22 +107,16 @@ public class TestSuit {
 		JellyBean jellyBean = ctx.getBean("jellyBean", JellyBean.class);
 		Assert.assertNotNull(jellyBean);
 		Assert.assertNotNull(jellyBean.getKitKat());
-		Assert.assertEquals("KitKat", jellyBean.getKitKat().getName());
+		Assert.assertEquals("kitkat", jellyBean.getKitKat().getName());
 	}
 	
 	/**
 	 * 测试循环依赖
 	 */
-	@Test
+	@Test(expected = BeansException.class)
 	public void test7() {
 		Student student = ctx.getBean("student", Student.class);
 		Teacher teacher = ctx.getBean("teacher", Teacher.class);
-		Assert.assertNotNull(student);
-		Assert.assertNotNull(teacher);
-		Assert.assertNotNull(student.getTeacher());
-		Assert.assertNotNull(teacher.getStudent());
-		Assert.assertEquals("Kimi", teacher.getStudent().getName());
-		Assert.assertEquals("Hamilton", student.getTeacher().getName());
 	}
 	
 	/**

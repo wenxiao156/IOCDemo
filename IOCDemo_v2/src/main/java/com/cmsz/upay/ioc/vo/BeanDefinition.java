@@ -1,23 +1,27 @@
 package com.cmsz.upay.ioc.vo;
 
+import java.lang.reflect.Method;
 import java.util.*;
 
 public class BeanDefinition {
     private String id;
-    private String fullClass;
+    private Class fullClass;
     private String scope;
     private boolean lazyInit;
-    private Map<String, Object> propertys = new HashMap<>();
-    private Map<String, Object> constructors = new HashMap<>();
     private Object obj;
-    public BeanDefinition(String id, String fullClass, String scope, boolean lazyInit,  Map<String, Object> propertysMap, Map<String, Object> constructorsMap, Object obj) {
+    private Method method;
+    private Class methodClass;
+    private Object[] methodParameters;
+
+    public BeanDefinition(String id, Class fullClass, String scope, boolean lazyInit, Object obj,Method method,Class methodClass,Object[] methodParameters) {
         this.id = id;
         this.fullClass = fullClass;
         this.scope = scope;
         this.lazyInit = lazyInit;
-        this.propertys = propertysMap;
-        this.constructors = constructorsMap;
         this.obj = obj;
+        this.method = method;
+        this.methodClass = methodClass;
+        this.methodParameters = methodParameters;
     }
     public Object getObj() {
         return obj;
@@ -31,10 +35,10 @@ public class BeanDefinition {
     public void setId(String id) {
         this.id = id;
     }
-    public String getFullClass() {
+    public Class getFullClass() {
         return fullClass;
     }
-    public void setFullClass(String fullClass) {
+    public void setFullClass(Class fullClass) {
         this.fullClass = fullClass;
     }
     public String getScope() {
@@ -49,17 +53,26 @@ public class BeanDefinition {
     public void setLazyInit(boolean lazyInit) {
         this.lazyInit = lazyInit;
     }
-    public Map<String, Object> getPropertys() {
-        return propertys;
-    }
-    public void setPropertys(HashMap<String, Object> propertys) {
-        this.propertys = propertys;
-    }
-    public Map<String, Object> getConstructors() {
-        return constructors;
-    }
-    public void setConstructors(HashMap<String, Object> constructors) {
-        this.constructors = constructors;
+    public Method getMethod() {
+        return method;
     }
 
+    public void setMethod(Method method) {
+        this.method = method;
+    }
+    public Class getMethodClass() {
+        return methodClass;
+    }
+
+    public void setMethodClass(Class methodClass) {
+        this.methodClass = methodClass;
+    }
+
+    public Object[] getMethodParameters() {
+        return methodParameters;
+    }
+
+    public void setMethodParameters(Object[] methodParameters) {
+        this.methodParameters = methodParameters;
+    }
 }
